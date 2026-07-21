@@ -116,10 +116,7 @@ def write_state(value: str):
         f.write(value)
 
 
-def notify(title: str, message: str, click: str):
-    if not NTFY_TOPIC:
-        print("!! NTFY_TOPIC not set — cannot send push. Message was:\n" + message)
-        return
+def _ntfy_post(title: str, message: str, click: str, email: str = "") -> int:
     req = urllib.request.Request(
         f"{NTFY_SERVER}/{NTFY_TOPIC}",
         data=message.encode("utf-8"),
@@ -130,10 +127,28 @@ def notify(title: str, message: str, click: str):
     req.add_header("Priority", "high")
     req.add_header("Tags", "bell,bike")
     req.add_header("Click", click)
-    if NTFY_EMAIL:
-        req.add_header("Email", NTFY_EMAIL)
+    if email:
+        req.add_header("Email", email)
     with urllib.request.urlopen(req, timeout=20) as r:
-        print(f"   ntfy status: {r.status}")
+        return r.status
+
+
+def notify(title: str, message: str, click: str):
+    if not NTFY_TOPIC:
+        print("!! NTFY_TOPIC not set — cannot send push. Message was:\n" + message)
+        return
+    # 1) Phone push — the reliable channel (no email header).
+    try:
+        print(f"   ntfy push status: {_ntfy_post(title, message, click)}")
+    except Exception as e:
+        print(f"   ntfy push FAILED: {e}")
+    # 2) Email copy — best-effort. ntfy.sh anonymous email can be rate-limited or
+    #    rejected (HTTP 400), so never let it break the push or fail the job.
+    if NTFY_EMAIL:
+        try:
+            print(f"   ntfy email status: {_ntfy_post(title, message, click, NTFY_EMAIL)}")
+        except Exception as e:
+            print(f"   ntfy email skipped (push still sent): {e}")
 
 
 def fetch_page_text() -> str:
