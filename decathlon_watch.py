@@ -31,14 +31,15 @@ import urllib.request
 
 from playwright.sync_api import sync_playwright
 
-URL = os.environ.get(
-    "WATCH_URL",
+# Note: GitHub Actions passes an EMPTY string (not "unset") for a ${{ vars.X }}
+# that isn't defined, so we use `or default` rather than get(key, default).
+URL = os.environ.get("WATCH_URL") or (
     "https://booking.decathlon.net/country/FR/steps/time-slots"
     "?mode=storeLocator&storeId=243&shop=a4f4a59a-92ed-46a4-ab7a-446f1e41a332"
-    "&category=REPAIR&sku=fc0003fc-41f9-4bd0-a153-809e0ef14866",
+    "&category=REPAIR&sku=fc0003fc-41f9-4bd0-a153-809e0ef14866"
 )
-TARGET_BEFORE = os.environ.get("TARGET_BEFORE", "2026-09-07").strip()
-NTFY_SERVER = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+TARGET_BEFORE = (os.environ.get("TARGET_BEFORE") or "2026-09-07").strip()
+NTFY_SERVER = (os.environ.get("NTFY_SERVER") or "https://ntfy.sh").rstrip("/")
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "").strip()
 NTFY_EMAIL = os.environ.get("NTFY_EMAIL", "").strip()
 STATE_FILE = os.environ.get("STATE_FILE", "state/last_earliest.txt")
