@@ -1,0 +1,48 @@
+name: Decathlon slot watch
+
+# Runs on GitHub's servers — your laptop/phone do NOT need to be on.
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 min (GitHub may delay a few min under load)
+  workflow_dispatch: {}       # lets you run it manually from the Actions tab
+
+permissions:
+  contents: write             # allows committing the tiny state file back
+
+concurrency:
+  group: slot-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Chromium + Playwright
+        run: |
+          pip install --quiet playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Check for an earlier slot
+        env:
+          WATCH_URL:     ${{ vars.WATCH_URL }}
+          TARGET_BEFORE: ${{ vars.TARGET_BEFORE }}
+          NTFY_TOPIC:    ${{ secrets.NTFY_TOPIC }}
+          NTFY_EMAIL:    ${{ secrets.NTFY_EMAIL }}
+        run: python decathlon_watch.py
+
+      - name: Remember last-alerted slot
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain state)" ]; then
+            git config user.name  "slot-watch-bot"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state
+            git commit -m "update slot state [skip ci]"
+            git push
+          fi
