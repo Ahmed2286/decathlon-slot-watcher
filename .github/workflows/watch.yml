@@ -3,7 +3,7 @@ name: Decathlon slot watch
 # Runs on GitHub's servers — your laptop/phone do NOT need to be on.
 on:
   schedule:
-    - cron: "*/15 * * * *"   # every 15 min (GitHub may delay a few min under load)
+    - cron: "*/5 * * * *"    # every 5 min (GitHub's floor; may still delay under load)
   workflow_dispatch: {}       # lets you run it manually from the Actions tab
 
 permissions:
