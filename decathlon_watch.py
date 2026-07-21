@@ -43,6 +43,9 @@ NTFY_SERVER = (os.environ.get("NTFY_SERVER") or "https://ntfy.sh").rstrip("/")
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "").strip()
 NTFY_EMAIL = os.environ.get("NTFY_EMAIL", "").strip()
 STATE_FILE = os.environ.get("STATE_FILE", "state/last_earliest.txt")
+# MODE=watch (default) alerts only when an earlier slot opens; MODE=heartbeat
+# sends a once-a-day "still running, earliest is X" status ping regardless.
+MODE = (os.environ.get("MODE") or "watch").strip().lower()
 
 # Weekday / month names in English and French (the widget follows the browser
 # language; we accept both so it works either way).
@@ -116,7 +119,8 @@ def write_state(value: str):
         f.write(value)
 
 
-def _ntfy_post(title: str, message: str, click: str, email: str = "") -> int:
+def _ntfy_post(title: str, message: str, click: str, email: str = "",
+               priority: str = "high", tags: str = "bell,bike") -> int:
     req = urllib.request.Request(
         f"{NTFY_SERVER}/{NTFY_TOPIC}",
         data=message.encode("utf-8"),
@@ -124,8 +128,8 @@ def _ntfy_post(title: str, message: str, click: str, email: str = "") -> int:
     )
     # Header values must be ASCII — keep title/tags plain, details go in the body.
     req.add_header("Title", title)
-    req.add_header("Priority", "high")
-    req.add_header("Tags", "bell,bike")
+    req.add_header("Priority", priority)
+    req.add_header("Tags", tags)
     req.add_header("Click", click)
     if email:
         req.add_header("Email", email)
@@ -133,20 +137,20 @@ def _ntfy_post(title: str, message: str, click: str, email: str = "") -> int:
         return r.status
 
 
-def notify(title: str, message: str, click: str):
+def notify(title: str, message: str, click: str, priority: str = "high", tags: str = "bell,bike"):
     if not NTFY_TOPIC:
         print("!! NTFY_TOPIC not set — cannot send push. Message was:\n" + message)
         return
     # 1) Phone push — the reliable channel (no email header).
     try:
-        print(f"   ntfy push status: {_ntfy_post(title, message, click)}")
+        print(f"   ntfy push status: {_ntfy_post(title, message, click, priority=priority, tags=tags)}")
     except Exception as e:
         print(f"   ntfy push FAILED: {e}")
     # 2) Email copy — best-effort. ntfy.sh anonymous email can be rate-limited or
     #    rejected (HTTP 400), so never let it break the push or fail the job.
     if NTFY_EMAIL:
         try:
-            print(f"   ntfy email status: {_ntfy_post(title, message, click, NTFY_EMAIL)}")
+            print(f"   ntfy email status: {_ntfy_post(title, message, click, NTFY_EMAIL, priority, tags)}")
         except Exception as e:
             print(f"   ntfy email skipped (push still sent): {e}")
 
@@ -204,6 +208,16 @@ def main():
         # No slots visible (fully booked, or the page didn't render this run).
         # Stay quiet so a transient blank doesn't spam you.
         print("No date headings found this run (no availability, or page didn't render). No alert.")
+        if MODE == "heartbeat":
+            notify(
+                "Decathlon watcher - daily check",
+                "Watcher is running. It couldn't read the slot list this run "
+                "(the store may be fully booked, or the page was slow) — it will keep checking.\n"
+                f"Book: {URL}",
+                URL,
+                priority="low",
+                tags="white_check_mark",
+            )
         return
 
     earliest, heading = dates[0]
@@ -212,6 +226,21 @@ def main():
     print(f"Earliest available: {earliest} ({heading})")
     print(f"Times under earliest: {', '.join(times) if times else '(collapsed / none read)'}")
     print(f"Next dates seen: {all_dates}")
+
+    if MODE == "heartbeat":
+        when = earliest.strftime("%A %d %B %Y")
+        t = (" at " + ", ".join(times)) if times else ""
+        notify(
+            "Decathlon watcher - daily check",
+            "Watcher is running fine — daily check-in.\n"
+            f"Earliest available appointment right now: {when}{t}.\n"
+            "You'll get a separate high-priority alert the moment anything sooner opens up.\n"
+            f"Book: {URL}",
+            URL,
+            priority="low",
+            tags="white_check_mark",
+        )
+        return
 
     last_alerted = read_state()
 
