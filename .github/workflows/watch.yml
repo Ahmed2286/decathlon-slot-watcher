@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: slot-watch
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   check:
