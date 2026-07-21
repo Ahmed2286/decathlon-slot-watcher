@@ -1,0 +1,36 @@
+name: Decathlon watcher — daily heartbeat
+
+# Once a day: a low-priority "still running, earliest slot is X" status ping,
+# so you know the watcher is alive even on days nothing changes.
+on:
+  schedule:
+    - cron: "0 18 * * *"   # 18:00 UTC = ~20:00 Paris (summer) / 19:00 (winter)
+  workflow_dispatch: {}     # lets you run it manually from the Actions tab
+
+concurrency:
+  group: slot-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Chromium + Playwright
+        run: |
+          pip install --quiet playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Daily status ping
+        env:
+          MODE: heartbeat
+          WATCH_URL:     ${{ vars.WATCH_URL }}
+          TARGET_BEFORE: ${{ vars.TARGET_BEFORE }}
+          NTFY_TOPIC:    ${{ secrets.NTFY_TOPIC }}
+          NTFY_EMAIL:    ${{ secrets.NTFY_EMAIL }}
+        run: python decathlon_watch.py
